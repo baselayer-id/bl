@@ -22,6 +22,7 @@ impl Client {
     pub fn with_token(api_url: &str, token: &str) -> Result<Self> {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
+            .user_agent(concat!("bl/", env!("CARGO_PKG_VERSION")))
             .build()
             .context("Failed to create HTTP client")?;
 
