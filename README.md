@@ -78,8 +78,9 @@ so the primer is wrapped as:
 { "hookSpecificOutput": { "additionalContext": "…" } }
 ```
 
-The matcher is `startup|resume|clear` — the primer is injected on fresh
-startup, resumed sessions, and after `/clear`. Requires Gemini CLI
+The matcher is `""` (empty string — "match all occurrences"). Gemini's
+lifecycle event matchers are exact strings, not regex, so this matches
+fresh startup, resumed sessions, and `/clear` alike. Requires Gemini CLI
 v0.26.0+ (hooks enabled by default).
 
 ### Primer contents

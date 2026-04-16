@@ -39,11 +39,19 @@ with the `--format` flag that the wrapper knows how to emit.
 ### Gemini CLI specifics
 
 - Hook: `SessionStart` only
-- Matcher: `startup|resume|clear` — fires on fresh start, `/resume`, and `/clear`
+- Matcher: `""` (empty string — "match all"). **Critical**: Gemini's lifecycle
+  matchers are exact strings, NOT regex. `"startup|resume|clear"` looks like a
+  sensible regex but matches nothing — the hook silently never fires. Use `""`
+  (or `"*"`) to match all session events.
 - Requires JSON on stdout. **Plain text will cause Gemini to error.**
 - On failure (auth missing, API unreachable) we emit `{}` — Gemini accepts this
   as a valid no-op, whereas empty output would error
 - Requires Gemini CLI v0.26.0+ (hooks on by default as of that release)
+
+To verify a hook fires, inspect `gemini --debug` output or temporarily swap the
+hook command for one that writes to a marker file (e.g., `echo fired >
+/tmp/marker`). If the marker never appears, the matcher is wrong — lifecycle
+matchers are the most common footgun.
 
 ## The silent-on-error rule
 

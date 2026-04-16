@@ -169,10 +169,15 @@ fn install_gemini_hooks(home: &std::path::Path) -> Result<()> {
         .as_object_mut()
         .context("hooks is not an object")?;
 
-    // Gemini CLI fires SessionStart on fresh startup, resume, and /clear.
-    // We want the primer injected in all three cases.
+    // Gemini CLI matchers for lifecycle events (SessionStart, etc.) are
+    // EXACT STRINGS, not regex — unlike tool-event matchers. An empty string
+    // (or "*") means "match all occurrences" — which is what we want, since
+    // we inject the primer on fresh startup, resume, and /clear alike.
+    //
+    // Do NOT use "startup|resume|clear" here — it's read literally and will
+    // silently match nothing, and the hook will never fire.
     let hook_entry = serde_json::json!([{
-        "matcher": "startup|resume|clear",
+        "matcher": "",
         "sequential": false,
         "hooks": [{
             "type": "command",
