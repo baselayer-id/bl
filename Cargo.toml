@@ -1,6 +1,6 @@
 [package]
 name = "bl"
-version = "0.1.0"
+version = "0.1.0-rc3"
 description = "Baselayer CLI — terminal interface to your knowledge vault"
 authors = ["BaseLayer Labs LLC"]
 edition = "2021"

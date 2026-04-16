@@ -26,6 +26,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Verify Cargo.toml version matches tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Version mismatch: Cargo.toml says '$CARGO_VERSION' but release is tagged 'v$TAG_VERSION'."
+            echo "::error::Bump Cargo.toml to '$TAG_VERSION' and retag, or re-run with the matching version."
+            exit 1
+          fi
+          echo "✓ Cargo.toml version ($CARGO_VERSION) matches tag (v$TAG_VERSION)"
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
