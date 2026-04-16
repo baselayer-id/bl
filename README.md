@@ -46,6 +46,7 @@ bl ask "what am I working on?"
 | `bl search "query"`  | Semantic search across entities and facts                      |
 | `bl remember "text"` | Record a memory (async distilled into graph)                   |
 | `bl setup claude`    | Install Claude Code SessionStart/PreCompact hooks              |
+| `bl setup gemini`    | Install Gemini CLI SessionStart hook                           |
 | `bl setup check`     | Verify all integrations                                        |
 
 ## How auth works
@@ -61,9 +62,27 @@ Revoke keys at https://app.baselayer.id/settings/api-keys.
 
 ## Hooks
 
+### Claude Code
+
 `bl setup claude` writes hooks to `~/.claude/settings.json` that call
 `bl startup` on SessionStart and PreCompact events. The hook outputs a
 compact context primer that Claude Code injects into the conversation.
+
+### Gemini CLI
+
+`bl setup gemini` writes a SessionStart hook to `~/.gemini/settings.json`
+that calls `bl startup --format gemini`. Gemini requires a JSON response,
+so the primer is wrapped as:
+
+```json
+{ "hookSpecificOutput": { "additionalContext": "…" } }
+```
+
+The matcher is `startup|resume|clear` — the primer is injected on fresh
+startup, resumed sessions, and after `/clear`. Requires Gemini CLI
+v0.26.0+ (hooks enabled by default).
+
+### Primer contents
 
 The primer is designed to be small (~1500 tokens) and includes:
 

@@ -21,6 +21,24 @@ pub async fn claude(remove: bool) -> Result<()> {
     Ok(())
 }
 
+/// Install or remove Gemini CLI hooks.
+pub async fn gemini(remove: bool) -> Result<()> {
+    let home = dirs::home_dir().context("No home directory")?;
+
+    if remove {
+        remove_gemini_hooks(&home)?;
+        println!("✓ Removed Baselayer hooks from Gemini CLI");
+    } else {
+        install_gemini_hooks(&home)?;
+        println!("✓ Installed Baselayer hooks for Gemini CLI");
+        println!();
+        println!("  SessionStart → bl startup --format gemini (context injection)");
+        println!();
+        println!("  Restart Gemini CLI for changes to take effect.");
+    }
+    Ok(())
+}
+
 /// Check all IDE integration status.
 pub async fn check() -> Result<()> {
     let home = dirs::home_dir().context("No home directory")?;
@@ -56,6 +74,19 @@ pub async fn check() -> Result<()> {
         }
     } else {
         println!("✗ Claude Code MCP: no config found");
+    }
+
+    // Check Gemini CLI hooks
+    let gemini_settings = home.join(".gemini").join("settings.json");
+    if gemini_settings.exists() {
+        let content = std::fs::read_to_string(&gemini_settings).unwrap_or_default();
+        if content.contains("bl startup") {
+            println!("✓ Gemini CLI hooks: installed");
+        } else {
+            println!("✗ Gemini CLI hooks: not installed (run `bl setup gemini`)");
+        }
+    } else {
+        println!("- Gemini CLI hooks: no ~/.gemini/settings.json (skip if not using Gemini)");
     }
 
     // Check auth
@@ -109,6 +140,96 @@ fn install_claude_hooks(home: &std::path::Path) -> Result<()> {
 
     hooks.insert("SessionStart".to_string(), hook_entry.clone());
     hooks.insert("PreCompact".to_string(), hook_entry);
+
+    let output = serde_json::to_string_pretty(&config)?;
+    std::fs::write(&settings_path, output).context("Failed to write settings.json")?;
+
+    Ok(())
+}
+
+fn install_gemini_hooks(home: &std::path::Path) -> Result<()> {
+    let settings_dir = home.join(".gemini");
+    std::fs::create_dir_all(&settings_dir).context("Failed to create ~/.gemini/")?;
+
+    let settings_path = settings_dir.join("settings.json");
+
+    let mut config: serde_json::Value = if settings_path.exists() {
+        let content =
+            std::fs::read_to_string(&settings_path).context("Failed to read settings.json")?;
+        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let hooks = config
+        .as_object_mut()
+        .context("settings.json root is not an object")?
+        .entry("hooks")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .context("hooks is not an object")?;
+
+    // Gemini CLI fires SessionStart on fresh startup, resume, and /clear.
+    // We want the primer injected in all three cases.
+    let hook_entry = serde_json::json!([{
+        "matcher": "startup|resume|clear",
+        "sequential": false,
+        "hooks": [{
+            "type": "command",
+            "command": "bl startup --format gemini",
+            "name": "Baselayer context primer",
+            "timeout": 60000
+        }]
+    }]);
+
+    hooks.insert("SessionStart".to_string(), hook_entry);
+
+    let output = serde_json::to_string_pretty(&config)?;
+    std::fs::write(&settings_path, output).context("Failed to write settings.json")?;
+
+    Ok(())
+}
+
+fn remove_gemini_hooks(home: &std::path::Path) -> Result<()> {
+    let settings_path = home.join(".gemini").join("settings.json");
+    if !settings_path.exists() {
+        return Ok(());
+    }
+
+    let content =
+        std::fs::read_to_string(&settings_path).context("Failed to read settings.json")?;
+    let mut config: serde_json::Value =
+        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}));
+
+    if let Some(hooks) = config.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+        if let Some(entries) = hooks.get("SessionStart").and_then(|v| v.as_array()) {
+            let filtered: Vec<_> = entries
+                .iter()
+                .filter(|entry| {
+                    // Drop any matcher whose first command starts with `bl `.
+                    let has_bl = entry
+                        .pointer("/hooks/0/command")
+                        .and_then(|c| c.as_str())
+                        .is_some_and(|c| c.starts_with("bl "));
+                    !has_bl
+                })
+                .cloned()
+                .collect();
+
+            if filtered.is_empty() {
+                hooks.remove("SessionStart");
+            } else {
+                hooks.insert(
+                    "SessionStart".to_string(),
+                    serde_json::Value::Array(filtered),
+                );
+            }
+        }
+
+        if hooks.is_empty() {
+            config.as_object_mut().unwrap().remove("hooks");
+        }
+    }
 
     let output = serde_json::to_string_pretty(&config)?;
     std::fs::write(&settings_path, output).context("Failed to write settings.json")?;
